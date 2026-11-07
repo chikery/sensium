@@ -1,0 +1,411 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#000000">
+<title>센시엄 Sensium</title>
+<meta name="description" content="시각 중심의 예술 작품을 청각적·공감각적 언어와 음악으로 번역하는 AI 기반 전시 감상 서비스, 센시엄.">
+<style>
+:root{
+  --bg:#000;
+  --ink:#fff;
+  --muted:#9a9a9a;
+  --soft:#c9c9c9;
+  --rule:rgba(255,255,255,.22);
+  --ease:cubic-bezier(.19,1,.22,1);
+  --maxw:1400px;
+  --gutter:22px;
+  --nav-h:66px;
+  --d:min(86vw,58svh);          /* 비눗방울 기본 지름 */
+  --film:.4;                    /* 표면 진주빛(무지갯빛) 세기: 0 = 완전 흑백 */
+  --font:"Roobert","Inter","Neue Haas Grotesk Display","Pretendard","Apple SD Gothic Neo","Noto Sans KR","Malgun Gothic",ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth;-webkit-text-size-adjust:100%}
+body{
+  background:var(--bg);color:var(--ink);font-family:var(--font);font-weight:400;
+  font-size:16px;line-height:1.6;letter-spacing:0;
+  word-break:keep-all;overflow-wrap:break-word;-webkit-font-smoothing:antialiased;overflow-x:hidden;
+}
+a{color:inherit;text-decoration:none}
+.wrap{width:100%;max-width:calc(var(--maxw) + var(--gutter)*2);margin:0 auto;padding:0 var(--gutter)}
+.label{display:block;font-size:12px;line-height:1.4;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);margin-bottom:28px}
+
+/* ---------- 스크롤을 따라 흐르는 비눗방울 (화면 고정 레이어) ---------- */
+.orb-layer{position:fixed;inset:0;z-index:0;overflow:hidden;pointer-events:none}
+.orb{position:absolute;left:0;top:0;width:var(--d);aspect-ratio:1;border-radius:50%;will-change:transform,border-radius;opacity:0;transition:opacity 1.6s ease}
+.orb.ready{opacity:1}
+.orb i{position:absolute;display:block;inset:0;border-radius:inherit}
+.orb .o-glow{inset:-34%;border-radius:50%;background:radial-gradient(circle,rgba(255,255,255,.11) 0,rgba(255,255,255,.04) 46%,transparent 68%)}
+.orb .o-body{
+  background:
+    radial-gradient(circle at 50% 50%,rgba(255,255,255,0) 54%,rgba(255,255,255,.035) 68%,rgba(255,255,255,.12) 84%,rgba(255,255,255,.28) 96%,rgba(255,255,255,.07) 100%),
+    radial-gradient(120% 120% at 28% 18%,rgba(255,255,255,.15),rgba(255,255,255,0) 52%),
+    radial-gradient(90% 90% at 80% 88%,rgba(205,220,255,.08),transparent 60%);
+  box-shadow:0 0 110px rgba(255,255,255,.10),inset 0 0 50px rgba(255,255,255,.06);
+}
+.orb .o-film{ /* 아주 부드럽게 번진 진주빛 막 */
+  opacity:var(--film);mix-blend-mode:screen;filter:blur(22px);
+  background:conic-gradient(rgba(140,190,255,0),rgba(255,170,225,.22),rgba(255,235,160,.18),rgba(160,255,230,.16),rgba(140,190,255,0) 85%);
+  -webkit-mask-image:radial-gradient(circle,transparent 50%,#000 80%,transparent 99%);
+          mask-image:radial-gradient(circle,transparent 50%,#000 80%,transparent 99%);
+}
+.orb .o-spec{ /* 가장자리를 따라 흐르는 부드러운 빛 */
+  box-shadow:inset 16px 16px 46px -22px rgba(255,255,255,.5),inset -12px -12px 52px -28px rgba(200,215,255,.26);
+}
+
+/* ---------- 상단 내비게이션 ---------- */
+.nav{
+  position:fixed;top:0;left:0;right:0;height:var(--nav-h);z-index:50;
+  display:flex;align-items:center;justify-content:space-between;padding:0 var(--gutter);
+  color:#fff;mix-blend-mode:difference;
+}
+.nav .logo{font-size:20px;line-height:1;letter-spacing:.01em}
+.nav ul{display:flex;align-items:center;gap:14px;list-style:none}
+.nav ul a{font-size:12px;line-height:1.2;letter-spacing:.02em;white-space:nowrap}
+.nav .ul{display:inline-flex;gap:6px;padding-bottom:3px;border-bottom:1px solid rgba(255,255,255,.55);transition:opacity .4s ease}
+.nav .ul:hover{opacity:.55}
+.nav .cta{display:inline-flex;gap:8px;padding:9px 22px;border:1px solid rgba(255,255,255,.45);border-radius:75px;transition:background .6s var(--ease),color .6s var(--ease)}
+.nav .cta:hover{background:#fff;color:#000}
+
+.menu-btn{
+  position:fixed;right:20px;bottom:20px;z-index:70;width:44px;height:44px;border-radius:10px;
+  border:1px solid rgba(255,255,255,.4);background:rgba(255,255,255,.08);color:#fff;
+  display:grid;place-content:center;gap:5px;cursor:pointer;
+}
+.menu-btn i{display:block;width:18px;height:1.5px;background:currentColor;transition:transform .5s var(--ease),opacity .3s}
+body.menu-open .menu-btn i:nth-child(1){transform:translateY(6.5px) rotate(45deg)}
+body.menu-open .menu-btn i:nth-child(2){opacity:0}
+body.menu-open .menu-btn i:nth-child(3){transform:translateY(-6.5px) rotate(-45deg)}
+.menu-btn:focus-visible{outline:1px solid #fff;outline-offset:3px}
+.overlay{
+  position:fixed;inset:0;z-index:60;background:rgba(0,0,0,.96);color:#fff;display:flex;flex-direction:column;justify-content:center;
+  padding:0 var(--gutter);gap:6px;opacity:0;pointer-events:none;transition:opacity .6s var(--ease);
+}
+body.menu-open .overlay{opacity:1;pointer-events:auto}
+.overlay a{font-size:clamp(2.2rem,9vw,4.5rem);font-weight:300;line-height:1.25}
+.overlay small{font-size:12px;color:var(--muted);margin-bottom:18px}
+
+/* ---------- HERO ---------- */
+.hero{position:relative;min-height:max(100svh,640px);overflow:hidden}
+.ringd{
+  position:absolute;left:50%;top:46svh;border-radius:50%;border:1px dashed rgba(255,255,255,.2);
+  transform:translate(-50%,-50%);pointer-events:none;z-index:0;
+}
+.ringd.r1{width:calc(var(--d)*1.58);aspect-ratio:1}
+.ringd.r2{width:calc(var(--d)*1.46);aspect-ratio:1}
+h1 .w{
+  position:absolute;z-index:3;color:#fff;mix-blend-mode:difference;
+  font-weight:400;font-size:clamp(2rem,9.2vw,3.4rem);line-height:1;letter-spacing:.01em;white-space:nowrap;
+}
+h1 .w1{left:6%;top:15%}
+h1 .w2{right:6%;top:37%;text-align:right}
+h1 .w3{left:6%;top:58%}
+.hero-bottom{position:absolute;left:0;right:0;bottom:0;z-index:3;padding-bottom:clamp(76px,10svh,100px)}
+.hero-bottom .wrap{display:flex;flex-direction:column;gap:22px;align-items:flex-start}
+.audience{font-size:14px;line-height:1.6;color:rgba(255,255,255,.8);max-width:22em}
+.pill{
+  display:inline-flex;gap:10px;align-items:center;padding:11px 33px;border-radius:75px;
+  font-family:inherit;font-size:16px;font-weight:400;line-height:1.5;
+  background:rgba(255,255,255,.06);color:#fff;border:1px solid rgba(255,255,255,.35);
+  transition:border-color .8s var(--ease),letter-spacing .8s var(--ease),background .8s var(--ease);
+}
+.pill:hover,.pill:focus-visible{border-color:rgba(255,255,255,.95);letter-spacing:.04em;background:rgba(255,255,255,.14);outline:none}
+.pill:focus-visible{outline:1px solid #fff;outline-offset:4px}
+.scroll{
+  position:fixed;right:20px;bottom:76px;z-index:20;font-size:11px;line-height:1.4;letter-spacing:.05em;text-transform:uppercase;color:#fff;
+  transition:opacity .4s ease;pointer-events:none;
+}
+.scroll.hide{opacity:0}
+
+/* ---------- 본문: 한 장의 어두운 캔버스 위로 흐르는 글 ---------- */
+main,footer{position:relative;z-index:1}
+section{position:relative;padding:96px 0}
+h2{font-weight:300;font-size:clamp(2rem,6.4vw,4.9rem);line-height:1.1;letter-spacing:0;margin-bottom:34px;max-width:15em}
+.body-t{font-size:clamp(1rem,2.2vw,1.125rem);line-height:1.7;color:var(--soft);max-width:34em}
+
+.intro .cols{display:grid;gap:34px}
+.intro .left{font-size:15px;line-height:1.5;text-transform:uppercase;letter-spacing:.04em}
+.bar{
+  display:flex;justify-content:space-between;align-items:center;margin-top:28px;max-width:360px;
+  padding:8px 0 10px;border-bottom:1px solid rgba(255,255,255,.5);text-transform:none;font-size:15px;
+}
+.bar span{transition:transform .6s var(--ease)}
+.bar:hover span{transform:translateX(6px)}
+.lead{font-size:clamp(1.05rem,2.2vw,1.2rem);line-height:1.7;max-width:30em;color:#eee}
+
+.rows{list-style:none;margin-top:56px;border-top:1px solid var(--rule)}
+.row{display:grid;gap:10px;padding:28px 0;border-bottom:1px solid var(--rule)}
+.row h3{font-weight:400;font-size:clamp(1.3rem,3.2vw,1.8rem);line-height:1.25}
+.row p{font-size:1rem;line-height:1.7;color:var(--soft);max-width:34em}
+.flow{list-style:none;margin-top:70px;border-top:1px solid var(--rule)}
+.flow li{display:grid;gap:6px;padding:24px 0;border-bottom:1px solid var(--rule)}
+.flow small{font-size:12px;line-height:1.19;color:var(--muted)}
+.flow strong{font-weight:400;font-size:clamp(1.15rem,2.6vw,1.5rem);line-height:1.3}
+.flow span{font-size:.95rem;color:var(--soft)}
+.outs{display:grid;border-bottom:1px solid var(--rule)}
+.outs div{padding:24px 0;border-bottom:1px solid var(--rule)}
+.outs div:last-child{border-bottom:0}
+.outs h3{font-weight:400;font-size:clamp(1.15rem,2.6vw,1.5rem);line-height:1.3;margin-bottom:4px}
+.outs p{font-size:.95rem;color:var(--soft)}
+.core{font-weight:300;font-size:clamp(1.3rem,3.2vw,2.1rem);line-height:1.5;margin-top:80px;max-width:26em}
+.core b{font-weight:400}
+.diff{font-size:clamp(1rem,2.2vw,1.125rem);line-height:1.7;margin-top:28px;max-width:34em;color:var(--soft)}
+
+.faq{margin-top:56px;border-top:1px solid var(--rule)}
+details{border-bottom:1px solid var(--rule)}
+summary{list-style:none;cursor:pointer;position:relative;padding:24px 44px 24px 0;font-size:clamp(1.05rem,2.4vw,1.35rem);line-height:1.4}
+summary::-webkit-details-marker{display:none}
+summary::after{content:"+";position:absolute;right:2px;top:50%;transform:translateY(-50%);font-size:1.6rem;font-weight:300;transition:transform .8s var(--ease)}
+details[open] summary::after{transform:translateY(-50%) rotate(45deg)}
+summary:focus-visible{outline:1px solid currentColor;outline-offset:2px}
+details p{padding:0 44px 26px 0;font-size:1rem;line-height:1.7;color:var(--soft);max-width:36em}
+
+.foot{padding:72px 0 120px;border-top:1px solid var(--rule)}
+.foot .wrap{display:grid;gap:28px}
+.foot .logo{font-size:16px}
+.foot p{font-size:11px;line-height:1.36;color:var(--muted)}
+
+.reveal{opacity:0;transform:translateY(26px);transition:opacity 1.25s var(--ease),transform 1.25s var(--ease)}
+.reveal.on{opacity:1;transform:none}
+
+@media (prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto}
+  .reveal{opacity:1;transform:none;transition:none}
+  .orb{transition:none}
+  .pill,.nav .ul,.nav .cta,.bar span,summary::after,.overlay,.menu-btn i{transition:none}
+}
+@media (max-width:767px){
+  .nav .cta{padding:0 0 3px;border:0;border-radius:0;border-bottom:1px solid rgba(255,255,255,.55)}
+  .nav .cta span{display:none}
+}
+@media (min-width:768px){
+  :root{--gutter:40px;--d:min(50vw,74svh,860px)}
+  section{padding:152px 0}
+  .nav .logo{font-size:24px}
+  .nav ul{gap:26px}
+  .nav ul a{font-size:13px}
+  h1 .w{font-size:clamp(2rem,5.4vw,5.5rem)}
+  h1 .w1{left:9%;top:16%}
+  h1 .w2{right:9%;top:45%}
+  h1 .w3{left:17%;top:73%}
+  .hero-bottom{padding-bottom:clamp(40px,7svh,70px)}
+  .hero-bottom .wrap{flex-direction:row;justify-content:space-between;align-items:flex-end}
+  .audience{font-size:15px}
+  .scroll{right:30px;bottom:150px}
+  .menu-btn{right:30px;bottom:30px}
+  .intro .cols{grid-template-columns:1fr 1.4fr;gap:19px}
+  .row,.flow li{grid-template-columns:1fr 1.5fr;gap:40px;align-items:baseline}
+  .outs{grid-template-columns:1fr 1fr;column-gap:40px}
+  .outs div{border-bottom:0}
+  .foot .wrap{grid-template-columns:1fr 1fr 1fr;align-items:end}
+}
+</style>
+</head>
+<body>
+
+<div class="orb-layer" aria-hidden="true">
+  <div class="orb" id="orb">
+    <i class="o-glow"></i><i class="o-body"></i><i class="o-film"></i><i class="o-spec"></i>
+  </div>
+</div>
+
+<nav class="nav" aria-label="주요 메뉴">
+  <a class="logo" href="#top">센시엄 Sensium</a>
+  <ul>
+    <li><a class="ul" href="#problem">문제 <span aria-hidden="true">↓</span></a></li>
+    <li><a class="ul" href="#service">서비스 <span aria-hidden="true">↓</span></a></li>
+    <li><a class="cta" href="#faq">FAQ <span aria-hidden="true">→</span></a></li>
+  </ul>
+</nav>
+
+<header class="hero" id="top">
+  <i class="ringd r2" aria-hidden="true"></i><i class="ringd r1" aria-hidden="true"></i>
+  <h1>
+    <span class="w w1">보이지 않아도,</span>
+    <span class="w w2">작품의 심상은</span>
+    <span class="w w3">들립니다</span>
+  </h1>
+  <div class="hero-bottom">
+    <div class="wrap">
+      <p class="audience">예술 감상을 즐기는 빛 번짐 저시력자와 전체 실명 시각장애인을 위한</p>
+      <a class="pill" href="#service">서비스 설명 보기 <span aria-hidden="true">→</span></a>
+    </div>
+  </div>
+</header>
+
+<div class="scroll" id="scroll" aria-hidden="true">Scroll ↓</div>
+<button class="menu-btn" id="menuBtn" type="button" aria-label="메뉴 열기" aria-expanded="false" aria-controls="overlay"><i></i><i></i><i></i></button>
+<div class="overlay" id="overlay" aria-hidden="true">
+  <small>센시엄 Sensium</small>
+  <a href="#problem">문제</a>
+  <a href="#service">서비스</a>
+  <a href="#faq">FAQ</a>
+</div>
+
+<main>
+<section class="intro" id="intro">
+  <div class="wrap">
+    <div class="cols">
+      <div class="left reveal">센시엄 · Sensium<br>Sense + Museum
+        <a class="bar" href="#service">서비스 설명 보기 <span aria-hidden="true">→</span></a>
+      </div>
+      <p class="lead reveal">센시엄은 시각 중심의 예술 작품을 청각적·공감각적 언어와 음악으로 번역해, 작품의 외형뿐 아니라 그 안에 담긴 심상과 정서까지 경험할 수 있도록 돕는 AI 기반 전시 감상 서비스입니다.</p>
+    </div>
+  </div>
+</section>
+
+<section id="problem" style="padding-top:0">
+  <div class="wrap">
+    <span class="label reveal">문제</span>
+    <h2 class="reveal">전시는 보는 사람 중심으로 만들어져 있습니다</h2>
+    <p class="body-t reveal">기존 전시 환경은 시각적 감상을 중심으로 구성되어 있어, 시각장애인이 작품의 외형과 내면적 의미를 함께 이해하고 경험할 수단이 부족합니다.</p>
+    <ul class="rows">
+      <li class="row reveal"><h3>정보 접근성</h3><p>작품 설명이 점자로 제공되지 않아 작품 정보를 파악하기 어렵습니다.</p></li>
+      <li class="row reveal"><h3>촉각적 감상</h3><p>만질 수 있는 레플리카가 있더라도 훼손되어 있거나 실제 작품과 크기가 달라 작품을 온전히 이해하기 어렵습니다.</p></li>
+      <li class="row reveal"><h3>설명의 부재</h3><p>작품에 대한 설명이 전혀 제공되지 않으면 작품의 외형이나 내용을 파악하기 어렵습니다.</p></li>
+      <li class="row reveal"><h3>감상 경험</h3><p>작품의 외형뿐 아니라 작품이 전달하는 심상과 정서, 의미를 이해하고 감상하는 데 어려움이 있습니다.</p></li>
+    </ul>
+  </div>
+</section>
+
+<section id="service">
+  <div class="wrap">
+    <span class="label reveal">서비스</span>
+    <h2 class="reveal">작품의 형태는 음성으로,<br>작품의 심상은 음악으로</h2>
+    <p class="body-t reveal">센시엄은 작품의 시각적 정보와 심상을 청각적·공감각적 언어로 번역해 음악과 함께 제공하는 AI 기반 전시 감상 앱입니다.</p>
+
+    <ul class="rows">
+      <li class="row reveal"><h3>외면 묘사</h3><p>작품의 외형적 특징을 청각적으로 이해할 수 있도록 음성 설명을 제공합니다.</p></li>
+      <li class="row reveal"><h3>작품 해석</h3><p>작품의 심상과 감상을 다룬 스테이트먼트 및 비평문을 청각적·공감각적 언어로 번역합니다.</p></li>
+      <li class="row reveal"><h3>AI 음악 제작</h3><p>번역된 언어를 기반으로 작품의 심상을 표현하는 AI 제작 앰비언트 음악을 생성합니다.</p></li>
+      <li class="row reveal"><h3>감상 연동</h3><p>작품 설명 음성과 AI 제작 음악을 연동해 작품 감상 경험을 제공합니다.</p></li>
+    </ul>
+
+    <ol class="flow" aria-label="서비스 작동 구조">
+      <li class="reveal"><small>입력</small><div><strong>전시 작품 및 관련 텍스트</strong><br><span>작품 이미지 · 스테이트먼트 · 비평문</span></div></li>
+      <li class="reveal"><small>번역</small><div><strong>AI 기반 청각적·공감각적 번역</strong><br><span>작품 외면 묘사 및 심상 해석</span></div></li>
+    </ol>
+    <div class="outs reveal">
+      <div><h3>음성 설명</h3><p>외면 묘사 및 작품 해석</p></div>
+      <div><h3>AI 앰비언트 음악</h3><p>작품의 심상을 음악으로 표현</p></div>
+    </div>
+
+    <p class="core reveal">시각 중심으로 구성된 예술 작품을 청각적·공감각적 언어와 음악으로 번역하여, 시각장애인이 작품의 외형뿐 아니라 그 안에 담긴 <b>심상과 정서</b>까지 경험할 수 있도록 돕는 서비스입니다.</p>
+    <p class="diff reveal">단순히 작품을 읽어주는 음성 안내가 아닙니다. 작품의 시각적 형태와 내면적 심상을, 각각 음성과 음악이라는 서로 다른 청각적 표현으로 번역합니다.</p>
+  </div>
+</section>
+
+<section id="faq">
+  <div class="wrap">
+    <span class="label reveal">FAQ</span>
+    <h2 class="reveal">자주 묻는 질문</h2>
+    <div class="faq">
+      <details class="reveal"><summary>센시엄은 어떤 서비스인가요?</summary>
+        <p>시각 중심의 예술 작품을 청각적·공감각적 언어와 음악으로 번역해 시각장애인의 작품 감상을 지원하는 AI 기반 전시 감상 앱입니다.</p></details>
+      <details class="reveal"><summary>누구를 위한 서비스인가요?</summary>
+        <p>예술 감상을 즐기지만 시각적 정보에 접근하기 어려운 빛 번짐 저시력자와 전체 실명 시각장애인을 위한 서비스입니다. 전시를 방문해 작품의 의미와 심상, 작가의 의도까지 이해하며 예술을 경험하고 싶은 분을 대상으로 합니다.</p></details>
+      <details class="reveal"><summary>일반 음성 안내와 무엇이 다른가요?</summary>
+        <p>작품을 읽어주는 데서 그치지 않습니다. 작품의 외형은 음성 설명으로, 작품의 심상은 AI가 제작한 앰비언트 음악으로 각각 번역해 함께 제공합니다.</p></details>
+      <details class="reveal"><summary>어떤 자료를 바탕으로 작품을 설명하나요?</summary>
+        <p>작품 이미지와 작품의 스테이트먼트, 비평문 등 전시 작품 및 관련 텍스트를 바탕으로 합니다.</p></details>
+      <details class="reveal"><summary>음악은 어떻게 만들어지나요?</summary>
+        <p>작품의 심상을 청각적·공감각적 언어로 번역한 뒤, 이를 바탕으로 작품의 심상을 표현하는 AI 제작 앰비언트 음악을 생성합니다.</p></details>
+      <details class="reveal"><summary>음성과 음악은 따로 듣나요?</summary>
+        <p>작품 설명 음성과 AI 제작 음악을 연동해 하나의 작품 감상 경험으로 제공합니다.</p></details>
+    </div>
+  </div>
+</section>
+</main>
+
+<footer class="foot">
+  <div class="wrap">
+    <div><span class="logo">센시엄 sensium</span></div>
+    <p>Sense + Museum<br>시각 중심의 예술 작품을 청각적·공감각적 언어와 음악으로 번역하는 AI 기반 전시 감상 서비스</p>
+    <div><a class="pill" href="#service">서비스 설명 다시 보기 <span aria-hidden="true">→</span></a></div>
+  </div>
+</footer>
+
+<script>
+(function(){
+  var reduce=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  /* ---- 메뉴 / 스크롤 안내 ---- */
+  var sc=document.getElementById('scroll');
+  var btn=document.getElementById('menuBtn'),ov=document.getElementById('overlay');
+  function setMenu(open){
+    document.body.classList.toggle('menu-open',open);
+    btn.setAttribute('aria-expanded',open?'true':'false');
+    btn.setAttribute('aria-label',open?'메뉴 닫기':'메뉴 열기');
+    ov.setAttribute('aria-hidden',open?'false':'true');
+  }
+  btn.addEventListener('click',function(){setMenu(!document.body.classList.contains('menu-open'))});
+  ov.querySelectorAll('a').forEach(function(a){a.addEventListener('click',function(){setMenu(false)})});
+  document.addEventListener('keydown',function(e){if(e.key==='Escape')setMenu(false)});
+
+  /* ---- 비눗방울: 스크롤 진행도(0~1)에 따라 위치·크기·회전이 곡선을 따라 흐름 ---- */
+  var orb=document.getElementById('orb');
+  var spec=orb.querySelector('.o-spec'),film=orb.querySelector('.o-film');
+  /* [진행도, 중심 x(vw), 중심 y(vh), 크기, 회전(deg)] */
+  var W=[
+    [0.00,50,46,1.00,  0],
+    [0.10,70,36,1.08, 25],
+    [0.28,77,58,1.20, 55],
+    [0.45,52,72,1.30, 95],
+    [0.62,28,60,1.38,130],
+    [0.80,72,42,1.45,175],
+    [1.00,58,58,1.50,215]
+  ];
+  function cr(a,b,c,d,t){return .5*((2*b)+(-a+c)*t+(2*a-5*b+4*c-d)*t*t+(-a+3*b-3*c+d)*t*t*t)}
+  function sample(p){
+    var i=0;while(i<W.length-2&&p>W[i+1][0])i++;
+    var t=(p-W[i][0])/(W[i+1][0]-W[i][0]);t=Math.max(0,Math.min(1,t));
+    var a=W[Math.max(i-1,0)],b=W[i],c=W[i+1],d=W[Math.min(i+2,W.length-1)],o=[];
+    for(var k=1;k<5;k++)o.push(cr(a[k],b[k],c[k],d[k],t));
+    return o;
+  }
+  function target(){
+    var h=document.documentElement.scrollHeight-window.innerHeight;
+    return h>0?Math.max(0,Math.min(1,window.scrollY/h)):0;
+  }
+  var cur=target(),tgt=cur,last=performance.now(),tm=0;
+  function onScroll(){tgt=target();sc.classList.toggle('hide',window.scrollY>40)}
+  window.addEventListener('scroll',onScroll,{passive:true});
+  window.addEventListener('resize',onScroll);onScroll();
+
+  function frame(now){
+    var dt=Math.min((now-last)/1000,.05);last=now;
+    var diff=tgt-cur;
+    cur=reduce?tgt:cur+diff*(1-Math.exp(-dt/.38));   /* 부드러운 감속 추종 */
+    if(!reduce)tm+=dt*2;
+    var s=sample(cur);var g=Math.min(1,cur/0.09);s[2]=1+0.5*g*g*(3-2*g); /* 스크롤 9%에서 150% 도달 */ var w=window.innerWidth,h=window.innerHeight,d=orb.offsetWidth;
+    var vel=reduce?0:Math.max(-.06,Math.min(.06,diff*(document.documentElement.scrollHeight/h)*.05)); /* 빠르게 스크롤할수록 살짝 늘어남 */
+    var sy=1+Math.abs(vel),sx=1-Math.abs(vel)*.6;
+    var tx=s[0]*w/100-d/2,ty=s[1]*h/100-d/2;
+    orb.style.transform='translate3d('+tx.toFixed(1)+'px,'+ty.toFixed(1)+'px,0) scale('+(s[2]*sx).toFixed(4)+','+(s[2]*sy).toFixed(4)+')';
+    /* 유기적으로 일렁이는 모양 */
+    var m=reduce?0:tm,
+        a=50+6.8*Math.sin(m*.33+cur*5),b=50+6.8*Math.sin(m*.29+1.7+cur*4),
+        c=50+6.8*Math.sin(m*.37+3.1+cur*6),e=50+6.8*Math.sin(m*.31+4.4+cur*3);
+    orb.style.borderRadius=a.toFixed(1)+'% '+(100-a).toFixed(1)+'% '+b.toFixed(1)+'% '+(100-b).toFixed(1)+'% / '+c.toFixed(1)+'% '+e.toFixed(1)+'% '+(100-e).toFixed(1)+'% '+(100-c).toFixed(1)+'%';
+    spec.style.transform='rotate('+(-30+s[3]+m*3).toFixed(1)+'deg)';
+    film.style.transform='rotate('+(s[3]*.7+m*5).toFixed(1)+'deg)';
+    if(!reduce)requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(function(n){last=n;frame(n);orb.classList.add('ready')});
+  if(reduce){window.addEventListener('scroll',function(){frame(performance.now())},{passive:true});window.addEventListener('resize',function(){frame(performance.now())})}
+
+  /* ---- 등장 ---- */
+  var els=document.querySelectorAll('.reveal');
+  if(reduce||!('IntersectionObserver' in window)){
+    els.forEach(function(e){e.classList.add('on')});return;
+  }
+  var io=new IntersectionObserver(function(es){
+    es.forEach(function(e){if(e.isIntersecting){e.target.classList.add('on');io.unobserve(e.target)}});
+  },{threshold:.1});
+  els.forEach(function(e){io.observe(e)});
+})();
+</script>
+</body>
+</html>
